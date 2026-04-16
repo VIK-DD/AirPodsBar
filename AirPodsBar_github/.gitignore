@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+__MACOSX/
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Compiled binaries
+*.o
+*.a
+*.dylib
+
+# Logs
+*.log
