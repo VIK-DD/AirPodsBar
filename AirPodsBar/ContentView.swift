@@ -21,6 +21,7 @@ struct AppTheme {
 }
 
 // MARK: - ContentView
+// Mark
 
 struct ContentView: View {
     @ObservedObject var monitor: BatteryMonitor
