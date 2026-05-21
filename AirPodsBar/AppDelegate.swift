@@ -10,7 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        // Previne instanțe multiple
+        // Prevent multiple instances
         let others = NSWorkspace.shared.runningApplications.filter {
             $0.bundleIdentifier == "com.vik.airpodsbar" &&
             $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
@@ -47,7 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         batteryMonitor?.startMonitoring()
 
-        // Actualizăm iconița + tooltip la schimbarea conexiunii
+        // Refresh icon + tooltip when the connection state changes
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("AirPodsConnectionChanged"),
             object: nil, queue: .main
@@ -55,8 +55,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateStatusFromMonitor()
         }
 
-        // Actualizăm iconița + tooltip la fiecare refresh de date
-        // (necesar pentru tooltip "În husă" și procentul din menu bar)
+        // Refresh icon + tooltip on every data refresh
+        // (needed for the "In case" tooltip and the menu bar percentage)
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("AirPodsDataRefreshed"),
             object: nil, queue: .main
@@ -64,14 +64,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateStatusFromMonitor()
         }
 
-        // Stare inițială după primul refresh
+        // Initial state after the first refresh
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             self?.updateStatusFromMonitor()
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Graceful shutdown — oprire curată a timer-elor
+        // Graceful shutdown — stop timers cleanly
         batteryMonitor?.stopMonitoring()
         eventMonitor?.stop()
     }
@@ -97,40 +97,40 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let leftInCase  = left  < 0 && caseHasBattery
         let rightInCase = right < 0 && caseHasBattery
 
-        // ── Tooltip dinamic complet ──
+        // ── Dynamic tooltip ──
         if connected || caseHasBattery {
             var parts: [String] = []
 
             if connected {
-                parts.append("AirPods Pro — Conectat")
+                parts.append("AirPods Pro — Connected")
             } else if caseHasBattery {
-                parts.append("AirPods Pro — În husă")
+                parts.append("AirPods Pro — In case")
             }
 
-            // Căști — cu status "În husă" dacă e cazul
+            // Earbuds — with "In case" status when applicable
             if leftInCase {
-                parts.append("Stânga: în husă")
+                parts.append("Left: in case")
             } else if left >= 0 {
-                parts.append("Stânga: \(left)%")
+                parts.append("Left: \(left)%")
             }
 
             if rightInCase {
-                parts.append("Dreapta: în husă")
+                parts.append("Right: in case")
             } else if right >= 0 {
-                parts.append("Dreapta: \(right)%")
+                parts.append("Right: \(right)%")
             }
 
             if caseB >= 0 {
-                parts.append("Husă: \(caseB)%")
+                parts.append("Case: \(caseB)%")
             }
 
             button.toolTip = parts.joined(separator: "\n")
         } else {
-            button.toolTip = "AirPods Pro — Deconectat"
+            button.toolTip = "AirPods Pro — Disconnected"
         }
 
-        // ── Procentul minim lângă iconiță (cea mai slabă cască activă) ──
-        // Afișat doar când căștile sunt conectate și active (nu în husă)
+        // ── Lowest active battery shown next to the icon ──
+        // Only when earbuds are connected and active (not in case)
         let activeBatteries = [left, right].filter { $0 >= 0 }
         if connected, let minBat = activeBatteries.min() {
             button.title = " \(minBat)%"
@@ -138,16 +138,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.title = ""
         }
 
-        // ── Iconița ──
+        // ── Icon ──
         if connected {
             if let img = NSImage(systemSymbolName: "airpodspro",
-                                 accessibilityDescription: "AirPods conectate") {
+                                 accessibilityDescription: "AirPods connected") {
                 img.isTemplate = true
                 button.image = img
                 button.imagePosition = .imageLeft
             }
         } else {
-            // Deconectat — badge roșu cu X
+            // Disconnected — red badge with X
             let symbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .light)
             guard let baseImg = NSImage(systemSymbolName: "airpodspro",
                                         accessibilityDescription: nil)?
@@ -168,15 +168,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let bx = totalW - badgeSize
                 let by = totalH - badgeSize - 0.5
 
-                // Inel contrast
+                // Contrast ring
                 NSColor.windowBackgroundColor.withAlphaComponent(0.85).setFill()
                 NSBezierPath(ovalIn: NSRect(x: bx-1.2, y: by-1.2,
                                              width: badgeSize+2.4, height: badgeSize+2.4)).fill()
-                // Cerc roșu
+                // Red circle
                 NSColor.systemRed.setFill()
                 NSBezierPath(ovalIn: NSRect(x: bx, y: by,
                                              width: badgeSize, height: badgeSize)).fill()
-                // X alb
+                // White X
                 NSColor.white.setStroke()
                 let p: CGFloat = 1.7
                 let x = NSBezierPath()

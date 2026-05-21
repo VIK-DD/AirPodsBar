@@ -9,7 +9,7 @@ struct AirPodsInfo {
     var leftBattery: Int = -1
     var rightBattery: Int = -1
     var caseBattery: Int = -1
-    // Charging inferit din delta baterie între refresh-uri
+    // Charging is inferred from battery delta between refreshes
     var leftCharging: Bool = false
     var rightCharging: Bool = false
     var caseCharging: Bool = false
@@ -25,12 +25,12 @@ class BatteryMonitor: ObservableObject {
     private var lastConnectedState: Bool = false
     private var timer: Timer?
 
-    // Valorile anterioare pentru detectarea charging prin delta
+    // Previous values used to infer charging via positive delta
     private var prevLeft: Int = -1
     private var prevRight: Int = -1
     private var prevCase: Int = -1
 
-    // Anti-spam notificări — reținem ce notificări am trimis deja
+    // Anti-spam: track which notifications have already been sent
     private var notifiedLow: Set<String> = []  // "left", "right", "case"
     private var notifiedCharging: Set<String> = []
 
@@ -77,19 +77,19 @@ class BatteryMonitor: ObservableObject {
             guard let self = self else { return }
             var info = self.fetchAirPodsInfo()
 
-            // Inferența charging se face pe main thread (în blocul async de jos)
-            // pentru a evita race condition cu prevLeft/Right/Case
+            // Charging inference runs on the main thread (in the async block below)
+            // to avoid a race condition on prevLeft/Right/Case.
 
             DispatchQueue.main.async {
                 let wasConnected = self.lastConnectedState
 
-                // Inferăm charging pe main thread — citire și scriere prevValues în același context
-                // Elimina race condition față de citirea de pe background thread
+                // Infer charging on the main thread — read and write prev values in the same context
+                // to eliminate the race against the background read.
                 if self.prevLeft  >= 0 && info.leftBattery  > self.prevLeft  { info.leftCharging  = true }
                 if self.prevRight >= 0 && info.rightBattery > self.prevRight { info.rightCharging = true }
                 if self.prevCase  >= 0 && info.caseBattery  > self.prevCase  { info.caseCharging  = true }
 
-                // Actualizăm prev values după inferență
+                // Update prev values after inference
                 if info.leftBattery  > 0 { self.prevLeft  = info.leftBattery }
                 if info.rightBattery > 0 { self.prevRight = info.rightBattery }
                 if info.caseBattery  > 0 { self.prevCase  = info.caseBattery }
@@ -98,36 +98,36 @@ class BatteryMonitor: ObservableObject {
                 self.isLoading = false
                 self.lastUpdated = Date()
 
-                // ── Schimbare stare conexiune ──
+                // ── Connection state change ──
                 if info.isConnected != wasConnected {
                     self.lastConnectedState = info.isConnected
                     NotificationCenter.default.post(
                         name: NSNotification.Name("AirPodsConnectionChanged"), object: nil)
                     if !info.isConnected {
-                        // La deconectare: resetam tot INAINTE de notificari
-                        // ca sa nu trimitem notificari false cu datele vechi
+                        // On disconnect: reset everything BEFORE notifications
+                        // so we don't send false notifications with stale data
                         self.notifiedLow.removeAll()
                         self.notifiedCharging.removeAll()
                         self.prevLeft = -1; self.prevRight = -1; self.prevCase = -1
-                        // ConnectionChanged notifica si AppDelegate — nu trimitem DataRefreshed dublat
+                        // ConnectionChanged already notifies AppDelegate — don't double-post DataRefreshed
                         return
                     }
                 }
 
-                // ── Notificări baterie scăzută (doar dacă conectat) ──
+                // ── Low-battery notifications (only when connected) ──
                 if info.isConnected {
                     self.checkLowBatteryNotifications(info: info)
                     self.checkChargingNotifications(info: info)
                 }
 
-                // ── Actualizează tooltip și label în menu bar ──
+                // ── Refresh menu bar tooltip and label ──
                 NotificationCenter.default.post(
                     name: NSNotification.Name("AirPodsDataRefreshed"), object: nil)
             }
         }
     }
 
-    // MARK: - Notificări baterie scăzută
+    // MARK: - Low battery notifications
 
     private func checkLowBatteryNotifications(info: AirPodsInfo) {
         let threshold = 20
@@ -135,20 +135,20 @@ class BatteryMonitor: ObservableObject {
         if info.leftBattery > 0 && info.leftBattery <= threshold && !info.leftCharging
             && !notifiedLow.contains("left") {
             sendNotification(
-                title: "Baterie scăzută — \(info.name)",
-                body: "Căsca stângă are doar \(info.leftBattery)% baterie.",
+                title: "Low battery — \(info.name)",
+                body: "Left earbud is at \(info.leftBattery)%.",
                 identifier: "low_left"
             )
             notifiedLow.insert("left")
         } else if info.leftBattery > threshold {
-            notifiedLow.remove("left")  // resetăm când bate s-a încărcat
+            notifiedLow.remove("left")  // reset once the battery has recharged
         }
 
         if info.rightBattery > 0 && info.rightBattery <= threshold && !info.rightCharging
             && !notifiedLow.contains("right") {
             sendNotification(
-                title: "Baterie scăzută — \(info.name)",
-                body: "Căsca dreaptă are doar \(info.rightBattery)% baterie.",
+                title: "Low battery — \(info.name)",
+                body: "Right earbud is at \(info.rightBattery)%.",
                 identifier: "low_right"
             )
             notifiedLow.insert("right")
@@ -159,8 +159,8 @@ class BatteryMonitor: ObservableObject {
         if info.caseBattery > 0 && info.caseBattery <= threshold && !info.caseCharging
             && !notifiedLow.contains("case") {
             sendNotification(
-                title: "Baterie scăzută — Husă",
-                body: "Husa de încărcare are doar \(info.caseBattery)% baterie.",
+                title: "Low battery — Case",
+                body: "Charging case is at \(info.caseBattery)%.",
                 identifier: "low_case"
             )
             notifiedLow.insert("case")
@@ -169,15 +169,15 @@ class BatteryMonitor: ObservableObject {
         }
     }
 
-    // MARK: - Notificări charging
+    // MARK: - Charging notifications
 
     private func checkChargingNotifications(info: AirPodsInfo) {
-        // Notificăm când o componentă ÎNCEPE să se încarce
+        // Notify when a component STARTS charging
         if info.leftCharging && !notifiedCharging.contains("left") {
             notifiedCharging.insert("left")
             sendNotification(
-                title: "Se încarcă — \(info.name)",
-                body: "Căsca stângă se încarcă (\(info.leftBattery)%).",
+                title: "Charging — \(info.name)",
+                body: "Left earbud is charging (\(info.leftBattery)%).",
                 identifier: "charging_left"
             )
         } else if !info.leftCharging {
@@ -187,8 +187,8 @@ class BatteryMonitor: ObservableObject {
         if info.rightCharging && !notifiedCharging.contains("right") {
             notifiedCharging.insert("right")
             sendNotification(
-                title: "Se încarcă — \(info.name)",
-                body: "Căsca dreaptă se încarcă (\(info.rightBattery)%).",
+                title: "Charging — \(info.name)",
+                body: "Right earbud is charging (\(info.rightBattery)%).",
                 identifier: "charging_right"
             )
         } else if !info.rightCharging {
@@ -198,8 +198,8 @@ class BatteryMonitor: ObservableObject {
         if info.caseCharging && !notifiedCharging.contains("case") {
             notifiedCharging.insert("case")
             sendNotification(
-                title: "Se încarcă — Husă",
-                body: "Husa de încărcare se încarcă (\(info.caseBattery)%).",
+                title: "Charging — Case",
+                body: "Charging case is charging (\(info.caseBattery)%).",
                 identifier: "charging_case"
             )
         } else if !info.caseCharging {
@@ -211,7 +211,7 @@ class BatteryMonitor: ObservableObject {
 
     private func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            print("[AirPodsBar] Notificări permise: \(granted)")
+            print("[AirPodsBar] Notifications granted: \(granted)")
         }
     }
 
@@ -224,12 +224,12 @@ class BatteryMonitor: ObservableObject {
         let request = UNNotificationRequest(
             identifier: "airpodsbar.\(identifier)",
             content: content,
-            trigger: nil  // livrat imediat
+            trigger: nil  // deliver immediately
         )
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("[AirPodsBar] Eroare notificare: \(error)")
+                print("[AirPodsBar] Notification error: \(error)")
             }
         }
     }
@@ -314,8 +314,8 @@ class BatteryMonitor: ObservableObject {
 
     func connect() {
         let addr = resolveAddress()
-        guard !addr.isEmpty else { setStatus("Adresa Bluetooth nu a fost gasita."); return }
-        setStatus("Se conecteaza...")
+        guard !addr.isEmpty else { setStatus("Bluetooth address not found."); return }
+        setStatus("Connecting...")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let normalized = addr.replacingOccurrences(of: "-", with: ":").uppercased()
@@ -332,8 +332,8 @@ class BatteryMonitor: ObservableObject {
 
     func disconnect() {
         let addr = resolveAddress()
-        guard !addr.isEmpty else { setStatus("Adresa Bluetooth nu a fost gasita."); return }
-        setStatus("Se deconecteaza...")
+        guard !addr.isEmpty else { setStatus("Bluetooth address not found."); return }
+        setStatus("Disconnecting...")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let normalized = addr.replacingOccurrences(of: "-", with: ":").uppercased()
@@ -352,7 +352,7 @@ class BatteryMonitor: ObservableObject {
                 self.notifiedLow.removeAll()
                 self.notifiedCharging.removeAll()
                 self.prevLeft = -1; self.prevRight = -1; self.prevCase = -1
-                // Notificăm AppDelegate să actualizeze iconița și tooltip-ul
+                // Notify AppDelegate to refresh the icon and tooltip
                 NotificationCenter.default.post(
                     name: NSNotification.Name("AirPodsConnectionChanged"), object: nil)
             }
@@ -382,11 +382,11 @@ class BatteryMonitor: ObservableObject {
         task.arguments = ["-c", command]
         let pipe = Pipe()
         task.standardOutput = pipe
-        task.standardError = Pipe()  // stderr separat — nu polueaza output-ul
+        task.standardError = Pipe()  // separate stderr — keeps stdout clean
 
         do { try task.run() } catch { return "" }
 
-        // Watchdog — dacă procesul blochează mai mult de timeout, îl terminăm forțat
+        // Watchdog — if the process hangs longer than timeout, kill it
         let deadline = DispatchTime.now() + timeout
         let result = DispatchSemaphore(value: 0)
 
@@ -397,7 +397,7 @@ class BatteryMonitor: ObservableObject {
 
         if result.wait(timeout: deadline) == .timedOut {
             task.terminate()
-            print("[AirPodsBar] WATCHDOG: shell timeout după \(timeout)s — \(command.prefix(60))")
+            print("[AirPodsBar] WATCHDOG: shell timeout after \(timeout)s — \(command.prefix(60))")
             return ""
         }
 

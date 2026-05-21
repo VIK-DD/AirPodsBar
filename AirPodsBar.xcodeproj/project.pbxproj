@@ -232,8 +232,8 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Necesar pentru a citi bateria AirPods";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Necesar pentru a citi bateria AirPods";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Needed to read your AirPods battery levels";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Needed to read your AirPods battery levels";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AirPodsBar;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -259,8 +259,8 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Necesar pentru a citi bateria AirPods";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Necesar pentru a citi bateria AirPods";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Needed to read your AirPods battery levels";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Needed to read your AirPods battery levels";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AirPodsBar;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 #  AirPodsBar — Install Script
-#  Rulează din folderul AirPodsBar/ cu: bash install.sh
+#  Run from the AirPodsBar/ project root:  bash install.sh
 # ============================================================
 
 set -e
@@ -16,46 +16,46 @@ echo ""
 echo -e "${BLUE}🎧 AirPodsBar Installer${NC}"
 echo "================================"
 
-# --- 0. Verifică că suntem în folderul corect ---
+# --- 0. Verify we're in the right folder ---
 if [ ! -f "AirPodsBar/main.swift" ]; then
-    echo -e "${RED}✗ Eroare: rulează scriptul DIN folderul AirPodsBar/${NC}"
+    echo -e "${RED}✗ Error: run this script FROM the project root (the folder that contains AirPodsBar/).${NC}"
     echo "  cd ~/Downloads/AirPodsBar && bash install.sh"
     exit 1
 fi
 
-# --- 1. Verifică Xcode Command Line Tools ---
-echo -e "\n${YELLOW}[1/6]${NC} Verific Xcode Command Line Tools..."
+# --- 1. Check Xcode Command Line Tools ---
+echo -e "\n${YELLOW}[1/6]${NC} Checking Xcode Command Line Tools..."
 if ! xcode-select -p &>/dev/null; then
-    echo -e "${RED}✗ Xcode Command Line Tools nu sunt instalate.${NC}"
+    echo -e "${RED}✗ Xcode Command Line Tools are not installed.${NC}"
     echo ""
-    echo "  Instalează-le cu:"
+    echo "  Install them with:"
     echo "  xcode-select --install"
     echo ""
-    echo "  Apoi rulează din nou: bash install.sh"
+    echo "  Then re-run: bash install.sh"
     exit 1
 fi
 echo -e "${GREEN}✓ Xcode CLT: $(xcode-select -p)${NC}"
 
 if ! command -v swiftc &>/dev/null; then
-    echo -e "${RED}✗ swiftc nu a fost găsit. Reinstalează Xcode Command Line Tools.${NC}"
+    echo -e "${RED}✗ swiftc not found. Reinstall Xcode Command Line Tools.${NC}"
     exit 1
 fi
 echo -e "${GREEN}✓ swiftc: $(swiftc --version | head -1)${NC}"
 
-# --- 2. blueutil (opțional, nu mai e necesar) ---
-echo -e "\n${YELLOW}[2/6]${NC} Verific dependențe..."
-echo -e "${GREEN}✓ Connect/Disconnect folosește IOBluetooth nativ — blueutil nu e necesar.${NC}" 
+# --- 2. Dependencies ---
+echo -e "\n${YELLOW}[2/6]${NC} Checking dependencies..."
+echo -e "${GREEN}✓ Connect/Disconnect uses native IOBluetooth — blueutil is not required.${NC}"
 
-# --- 3. Detectează arhitectura și compilează ---
-echo -e "\n${YELLOW}[3/6]${NC} Compilez pentru arhitectura ta..."
+# --- 3. Detect architecture and compile ---
+echo -e "\n${YELLOW}[3/6]${NC} Compiling for your architecture..."
 
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
     TARGET="arm64-apple-macos12.0"
-    echo "  Arhitectură: Apple Silicon (arm64)"
+    echo "  Architecture: Apple Silicon (arm64)"
 else
     TARGET="x86_64-apple-macos12.0"
-    echo "  Arhitectură: Intel (x86_64)"
+    echo "  Architecture: Intel (x86_64)"
 fi
 
 BUILD_DIR="$(pwd)/build"
@@ -76,12 +76,12 @@ SWIFT_FILES=(
 
 for f in "${SWIFT_FILES[@]}"; do
     if [ ! -f "$f" ]; then
-        echo -e "${RED}✗ Fișier lipsă: $f${NC}"
+        echo -e "${RED}✗ Missing file: $f${NC}"
         exit 1
     fi
 done
 
-echo "  Compilez... (poate dura 30-60 secunde)"
+echo "  Compiling... (this can take 30-60 seconds)"
 
 swiftc "${SWIFT_FILES[@]}" \
     -o "$MACOS_DIR/AirPodsBar" \
@@ -94,10 +94,10 @@ swiftc "${SWIFT_FILES[@]}" \
     -framework UserNotifications \
     -O
 
-echo -e "${GREEN}✓ Compilat cu succes pentru $TARGET${NC}"
+echo -e "${GREEN}✓ Compiled successfully for $TARGET${NC}"
 
-# --- 4. Creează Info.plist ---
-echo -e "\n${YELLOW}[4/6]${NC} Creez bundle-ul aplicației..."
+# --- 4. Create Info.plist ---
+echo -e "\n${YELLOW}[4/6]${NC} Creating the app bundle..."
 
 cat > "$CONTENTS/Info.plist" << 'PLIST_EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -123,9 +123,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST_EOF'
     <key>LSUIElement</key>
     <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>AirPodsBar citește nivelul bateriei AirPods.</string>
+    <string>AirPodsBar reads your AirPods battery levels.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
-    <string>AirPodsBar citește nivelul bateriei AirPods.</string>
+    <string>AirPodsBar reads your AirPods battery levels.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleIconFile</key>
@@ -138,32 +138,33 @@ cat > "$CONTENTS/Info.plist" << 'PLIST_EOF'
 </plist>
 PLIST_EOF
 
-# Copiază iconul în Resources
+# Copy icon into Resources
 if [ -f "AirPodsBar/AppIcon.png" ]; then
     cp "AirPodsBar/AppIcon.png" "$RESOURCES_DIR/AppIcon.png"
     cp "AirPodsBar/AppIcon@2x.png" "$RESOURCES_DIR/AppIcon@2x.png" 2>/dev/null || true
-    echo "  Icon copiat în bundle."
+    echo "  Icon copied into the bundle."
 fi
 
-# Creează .icns din PNG pentru Finder (iconița aplicației)
+# Build .icns from PNGs so Finder shows the right app icon
 if command -v iconutil &>/dev/null; then
     ICONSET_DIR="$BUILD_DIR/AppIcon.iconset"
     mkdir -p "$ICONSET_DIR"
-    # Copiază toate dimensiunile disponibile
     for f in AirPodsBar/Assets.xcassets/AppIcon.appiconset/*.png; do
         cp "$f" "$ICONSET_DIR/" 2>/dev/null || true
     done
-    iconutil -c icns "$ICONSET_DIR" -o "$RESOURCES_DIR/AppIcon.icns" 2>/dev/null &&         echo "  AppIcon.icns creat." || echo "  iconutil nu a putut crea .icns (ok, PNG folosit)."
+    iconutil -c icns "$ICONSET_DIR" -o "$RESOURCES_DIR/AppIcon.icns" 2>/dev/null && \
+        echo "  AppIcon.icns created." || \
+        echo "  iconutil could not create .icns (ok, PNG fallback in place)."
 fi
 
-echo -e "${GREEN}✓ Info.plist creat.${NC}"
+echo -e "${GREEN}✓ Info.plist created.${NC}"
 
-# --- 5. Mută în /Applications ---
-echo -e "\n${YELLOW}[5/6]${NC} Instalez în /Applications..."
+# --- 5. Install into /Applications ---
+echo -e "\n${YELLOW}[5/6]${NC} Installing into /Applications..."
 
 DEST="/Applications/AirPodsBar.app"
 if [ -d "$DEST" ]; then
-    echo "  Versiune veche detectată — o șterg..."
+    echo "  Existing version detected — removing it..."
     pkill -x AirPodsBar 2>/dev/null || true
     sleep 1
     rm -rf "$DEST"
@@ -172,35 +173,36 @@ fi
 cp -R "$APP_BUNDLE" "$DEST"
 echo -e "${GREEN}✓ /Applications/AirPodsBar.app${NC}"
 
-# --- 6. Configurează startup ---
-echo -e "\n${YELLOW}[6/6]${NC} Configurez pornirea automată la login..."
+# --- 6. Configure launch at login ---
+echo -e "\n${YELLOW}[6/6]${NC} Configuring launch at login..."
 
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 mkdir -p "$LAUNCH_AGENTS"
 
 PLIST_DEST="$LAUNCH_AGENTS/com.vik.airpodsbar.plist"
 
-# Scriem doar fișierul plist — launchd îl citește la login
-# NU apelăm launchctl load — ar porni o a doua instanță peste cea deja pornită
+# We just write the plist — launchd will pick it up at next login.
+# We do NOT call `launchctl load` here to avoid starting a second
+# instance on top of the one we're about to open below.
 cp "$(pwd)/com.vik.airpodsbar.plist" "$PLIST_DEST"
 
-echo -e "${GREEN}✓ Startup configurat (activ de la următorul login).${NC}"
+echo -e "${GREEN}✓ Startup configured (active from next login).${NC}"
 
 # --- Done ---
 echo ""
 echo -e "${GREEN}================================${NC}"
-echo -e "${GREEN}🎉 Instalare completă!${NC}"
+echo -e "${GREEN}🎉 Installation complete!${NC}"
 echo -e "${GREEN}================================${NC}"
 echo ""
-echo "  Pornesc AirPodsBar acum..."
+echo "  Launching AirPodsBar now..."
 open "$DEST"
 sleep 1
 echo ""
-echo -e "  🎧 Iconiță a apărut în bara de meniu (sus dreapta)."
-echo -e "  Apasă pe ea pentru a vedea bateria AirPods."
+echo -e "  🎧 An icon appeared in your menu bar (top right)."
+echo -e "  Click it to view your AirPods battery."
 echo ""
-echo -e "${BLUE}Comenzi utile:${NC}"
-echo "  Oprește app:          pkill -x AirPodsBar"
-echo "  Dezactivează startup: launchctl unload ~/Library/LaunchAgents/com.vik.airpodsbar.plist"
-echo "  Dezinstalează:        rm -rf /Applications/AirPodsBar.app"
-echo "  Re-instalează:        bash install.sh"
+echo -e "${BLUE}Useful commands:${NC}"
+echo "  Quit app:             pkill -x AirPodsBar"
+echo "  Disable startup:      launchctl unload ~/Library/LaunchAgents/com.vik.airpodsbar.plist"
+echo "  Uninstall:            rm -rf /Applications/AirPodsBar.app"
+echo "  Reinstall:            bash install.sh"
