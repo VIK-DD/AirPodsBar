@@ -1,91 +1,124 @@
 # 🎧 AirPodsBar
 
-Aplicație nativă macOS pentru bara de meniu care afișează bateria AirPods Pro în timp real.
+A native macOS menu bar app that displays your AirPods battery levels in real time.
 
-## Ce face
-- Afișează bateria pentru **căștea stângă**, **căștea dreaptă** și **husă**
-- Indică dacă căștile sunt **la ureche** (in-ear detection)
-- Indică dacă se **încarcă**
-- **Conectează / Deconectează** AirPods din aplicație
-- Pornește automat la **startup**
-- Se actualizează la fiecare **30 de secunde**
+![AirPodsBar preview](Assets/preview.png)
 
 ---
 
-## Instalare
+## Features
 
-### Pasul 1 — Instalează blueutil (pentru connect/disconnect)
+- Displays battery for **left earbud**, **right earbud**, and **case**
+- Shows whether earbuds are **in-ear** (in-ear detection)
+- Indicates when earbuds or case are **charging**
+- **Connect / Disconnect** your AirPods directly from the menu bar
+- **Launches at startup** automatically
+- Refreshes every **30 seconds**
+
+---
+
+## Screenshots
+
+| Menu Bar | Popover |
+|----------|---------|
+| ![Menu bar icon](Assets/menubar.png) | ![Popover](Assets/popover.png) |
+
+---
+
+## Requirements
+
+- macOS 12 Monterey or later
+- Xcode 14+
+- [Homebrew](https://brew.sh) (for `blueutil`)
+- AirPods connected via Bluetooth
+
+---
+
+## Installation
+
+### Step 1 — Install blueutil (required for connect/disconnect)
+
 ```bash
 brew install blueutil
 ```
 
-### Pasul 2 — Deschide proiectul în Xcode
+### Step 2 — Open the project in Xcode
+
 ```bash
 open AirPodsBar.xcodeproj
 ```
 
-### Pasul 3 — Build & Run
-1. În Xcode: **Product → Run** (⌘R)
-2. Prima dată va apărea o cerere de permisiuni Bluetooth — aprobă
+### Step 3 — Build & Run
 
-### Pasul 4 — Mută în Applications (pentru startup)
+1. In Xcode: **Product → Run** (⌘R)
+2. On first launch, approve the Bluetooth permission prompt
+
+### Step 4 — Move to Applications (required for startup)
+
 ```bash
-# Build Release
-# Product → Archive → Distribute App → Copy App
-
-# Sau build direct din terminal:
+# Build a Release version from terminal:
 xcodebuild -project AirPodsBar.xcodeproj -scheme AirPodsBar -configuration Release build
 
-# Copiază .app în Applications
+# Copy the .app to Applications:
 cp -R build/Release/AirPodsBar.app /Applications/
 ```
 
-### Pasul 5 — Activează pornirea la startup
+Or use **Product → Archive → Distribute App → Copy App** inside Xcode.
+
+### Step 5 — Enable launch at startup
+
 ```bash
 cp com.vik.airpodsbar.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.vik.airpodsbar.plist
 ```
 
-Pentru a dezactiva startup:
+To disable startup:
+
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.vik.airpodsbar.plist
 ```
 
 ---
 
-## Depanare
+## Troubleshooting
 
-**Bateriile apar ca "--"**
-- Asigură-te că AirPods sunt conectate la Mac
-- Încearcă să apeși butonul Refresh (↻)
-- macOS transmite datele de baterie doar când căștile sunt active
+**Battery shows "--"**
+- Make sure your AirPods are connected to your Mac
+- Try clicking the Refresh button (↻)
+- macOS only reports battery data when the earbuds are active
 
-**Connect/Disconnect nu funcționează**
-- Verifică că `blueutil` e instalat: `which blueutil`
-- Dacă e pe Apple Silicon (M1/M2): path-ul e `/opt/homebrew/bin/blueutil`
-- Dacă e pe Intel: `/usr/local/bin/blueutil`
+**Connect/Disconnect doesn't work**
+- Verify `blueutil` is installed: `which blueutil`
+- Apple Silicon (M1/M2/M3): path is `/opt/homebrew/bin/blueutil`
+- Intel Mac: path is `/usr/local/bin/blueutil`
 
-**Aplicația nu pornește la startup**
-- Verifică că app-ul e în `/Applications/AirPodsBar.app`
-- Re-rulează: `launchctl load ~/Library/LaunchAgents/com.vik.airpodsbar.plist`
+**App doesn't launch at startup**
+- Make sure the app is at `/Applications/AirPodsBar.app`
+- Re-run: `launchctl load ~/Library/LaunchAgents/com.vik.airpodsbar.plist`
 
 ---
 
-## Structura proiectului
+## Project structure
 
 ```
 AirPodsBar/
 ├── AirPodsBar.xcodeproj/
-│   └── project.pbxproj
 ├── AirPodsBar/
-│   ├── AirPodsBarApp.swift      # Entry point @main
-│   ├── AppDelegate.swift         # Menu bar + popover management
-│   ├── BatteryMonitor.swift      # IORegistry + blueutil integration
-│   ├── ContentView.swift         # UI SwiftUI
-│   └── AirPodsBar.entitlements  # Permisiuni Bluetooth
-└── com.vik.airpodsbar.plist     # LaunchAgent pentru startup
+│   ├── AirPodsBarApp.swift       # @main entry point
+│   ├── AppDelegate.swift          # Menu bar + popover management
+│   ├── BatteryMonitor.swift       # IORegistry + blueutil integration
+│   ├── ContentView.swift          # SwiftUI UI
+│   └── AirPodsBar.entitlements   # Bluetooth permissions
+├── com.vik.airpodsbar.plist      # LaunchAgent for startup
+└── install.sh                    # Quick install script
 ```
 
 ---
 
-Făcut cu ❤️ pentru macOS Monterey 12.7.6
+## License
+
+MIT — feel free to use, modify, and distribute.
+
+---
+
+Made with ❤️ for macOS
