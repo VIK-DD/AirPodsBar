@@ -1,5 +1,5 @@
-// main.swift — entry point explicit pentru swiftc
-// Nu folosi @main când compilezi cu swiftc direct (fără xcodebuild)
+// main.swift — explicit entry point for swiftc
+// Don't use @main when building with swiftc directly (without xcodebuild)
 import AppKit
 
 let delegate = AppDelegate()

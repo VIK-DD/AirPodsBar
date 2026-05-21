@@ -26,7 +26,7 @@ struct ContentView: View {
     @ObservedObject var monitor: BatteryMonitor
     @State private var pulseAnimation = false
     @State private var tick: Int = 0
-    // @AppStorage salvează automat în UserDefaults — persistă între sesiuni
+    // @AppStorage auto-saves to UserDefaults — persists across sessions
     @AppStorage("isDarkTheme") private var isDark: Bool = true
 
     var theme: AppTheme { AppTheme(isDark: isDark) }
@@ -45,10 +45,10 @@ struct ContentView: View {
                     if monitor.isLoading {
                         loadingView
                     } else if !monitor.airpods.isConnected && monitor.airpods.caseBattery < 0 {
-                        // Complet deconectat — nici husa nu raporteaza date
+                        // Fully disconnected — case isn't reporting either
                         disconnectedView
                     } else {
-                        // Conectat SAU castile sunt in husa (husa are baterie)
+                        // Connected OR earbuds are in the case (case reports battery)
                         batteryCards
                     }
                 }
@@ -75,22 +75,22 @@ struct ContentView: View {
         .frame(width: 320, height: 460)
         .animation(.easeInOut(duration: 0.25), value: isDark)
         .onAppear { pulseAnimation = true }
-        // Timer local la fiecare 5s — actualizează DOAR textul "acum Xs"
-        // Nu triggere re-render pe tot ContentView (spre deosebire de @Published)
+        // Local 5s timer — refreshes ONLY the "Xs ago" text
+        // Avoids re-rendering the whole ContentView (unlike @Published)
         .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
-            // Actualizăm doar când view-ul e activ (popover deschis)
-            tick = (tick + 1) % 720  // reset la 1h pentru a nu creste la infinit
+            // Tick only while the view is active (popover open)
+            tick = (tick + 1) % 720  // reset every hour so it doesn't grow unbounded
         }
     }
 
     // MARK: - Header
-    // Layout: [icon + titlu + status] ---- [timp | buton temă]
-    // Butonul de temă e aliniat cu textul "Actualizat acum Xs" pe aceeași linie
+    // Layout: [icon + title + status] ---- [timestamp | theme button]
+    // The theme button sits in line with the "Updated Xs ago" text
 
     var headerView: some View {
         HStack(alignment: .center, spacing: 12) {
 
-            // Stânga: icon AirPods
+            // Left: AirPods icon
             ZStack {
                 Circle()
                     .fill(theme.accentBlue.opacity(0.15))
@@ -100,7 +100,7 @@ struct ContentView: View {
                     .foregroundColor(theme.accentBlue)
             }
 
-            // Mijloc: nume + status conectat
+            // Middle: name + connection status
             VStack(alignment: .leading, spacing: 3) {
                 Text(monitor.airpods.isConnected ? monitor.airpods.name : "AirPods Pro")
                     .font(.system(size: 15, weight: .semibold))
@@ -124,8 +124,8 @@ struct ContentView: View {
                                 )
                         )
                     Text(
-                        monitor.airpods.isConnected ? "Conectat" :
-                        (monitor.airpods.caseBattery >= 0 ? "În husă" : "Deconectat")
+                        monitor.airpods.isConnected ? "Connected" :
+                        (monitor.airpods.caseBattery >= 0 ? "In case" : "Disconnected")
                     )
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(
@@ -137,10 +137,10 @@ struct ContentView: View {
 
             Spacer()
 
-            // Dreapta: timp actualizat + buton temă pe aceeași linie, aliniate curat
+            // Right: last-updated timestamp + theme button, neatly aligned
             HStack(spacing: 6) {
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text("Actualizat")
+                    Text("Updated")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                     Text(timeAgo(monitor.lastUpdated, tick: tick))
@@ -148,7 +148,7 @@ struct ContentView: View {
                         .foregroundColor(theme.textSecondary)
                 }
 
-                // Buton temă — mai mare (28x28) pentru a fi mai ușor de apăsat
+                // Theme button — bigger (28x28) for easier tapping
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.25)) { isDark.toggle() }
                 }) {
@@ -160,7 +160,7 @@ struct ContentView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help(isDark ? "Schimbă pe Light" : "Schimbă pe Dark")
+                .help(isDark ? "Switch to Light" : "Switch to Dark")
             }
         }
     }
@@ -168,20 +168,20 @@ struct ContentView: View {
     // MARK: - Battery Cards
 
     var batteryCards: some View {
-        // Logica inCase: casca nu raporteaza baterie (-1) DAR husa are baterie
-        // Asta inseamna cu certitudine ca e pusa in husa
+        // inCase logic: earbud reports no battery (-1) BUT case does
+        // That definitively means it's tucked into the case
         let caseHasBattery = monitor.airpods.caseBattery >= 0
         let leftInCase  = monitor.airpods.leftBattery  < 0 && caseHasBattery
         let rightInCase = monitor.airpods.rightBattery < 0 && caseHasBattery
 
         return VStack(spacing: 12) {
             HStack(spacing: 12) {
-                BudCard(label: "STÂNGA", icon: "airpodpro.left",
+                BudCard(label: "LEFT", icon: "airpodpro.left",
                         battery: monitor.airpods.leftBattery,
                         charging: monitor.airpods.leftCharging,
                         inCase: leftInCase,
                         theme: theme)
-                BudCard(label: "DREAPTA", icon: "airpodpro.right",
+                BudCard(label: "RIGHT", icon: "airpodpro.right",
                         battery: monitor.airpods.rightBattery,
                         charging: monitor.airpods.rightCharging,
                         inCase: rightInCase,
@@ -200,7 +200,7 @@ struct ContentView: View {
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle(tint: theme.accentBlue))
                 .scaleEffect(1.2)
-            Text("Se caută AirPods...")
+            Text("Looking for AirPods...")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(theme.textSecondary)
         }
@@ -213,10 +213,10 @@ struct ContentView: View {
                 .font(.system(size: 52, weight: .ultraLight))
                 .foregroundColor(theme.textSecondary.opacity(0.4))
             VStack(spacing: 6) {
-                Text("AirPods deconectate")
+                Text("AirPods disconnected")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Text("Apasă Conectează pentru a le conecta")
+                Text("Press Connect to reconnect them")
                     .font(.system(size: 11))
                     .foregroundColor(theme.textSecondary)
             }
@@ -235,7 +235,7 @@ struct ContentView: View {
                 HStack(spacing: 6) {
                     Image(systemName: monitor.airpods.isConnected ? "wifi.slash" : "wifi")
                         .font(.system(size: 11, weight: .semibold))
-                    Text(monitor.airpods.isConnected ? "Deconectează" : "Conectează")
+                    Text(monitor.airpods.isConnected ? "Disconnect" : "Connect")
                         .font(.system(size: 12, weight: .semibold))
                 }
                 .foregroundColor(monitor.airpods.isConnected ? theme.textPrimary : theme.connectText)
@@ -274,7 +274,7 @@ struct ContentView: View {
             Image(systemName: "arrow.up.circle")
                 .font(.system(size: 12))
                 .foregroundColor(theme.textSecondary)
-            Text("Pornire automată la login")
+            Text("Launch at login")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textSecondary)
             Spacer()
@@ -295,11 +295,11 @@ struct ContentView: View {
 
     func timeAgo(_ date: Date, tick: Int) -> String {
         let d = Int(Date().timeIntervalSince(date))
-        if d < 5  { return "chiar acum" }
-        if d < 60 { return "acum \(d)s" }
+        if d < 5  { return "just now" }
+        if d < 60 { return "\(d)s ago" }
         let m = d / 60
-        if m < 60 { return "acum \(m)m" }
-        return "acum \(m / 60)h"
+        if m < 60 { return "\(m)m ago" }
+        return "\(m / 60)h ago"
     }
 }
 
@@ -310,7 +310,7 @@ struct BudCard: View {
     let icon: String
     let battery: Int
     let charging: Bool
-    let inCase: Bool   // casca nu raporteaza baterie dar husa are baterie → e in husa
+    let inCase: Bool   // earbud reports no battery but case does → it's in the case
     let theme: AppTheme
 
     var batteryColor: Color {
@@ -346,11 +346,11 @@ struct BudCard: View {
                 }
             }
 
-            // ── Continut card ──
+            // ── Card content ──
             VStack(spacing: 5) {
                 if inCase {
-                    // Casca in husa — mesaj verde, bara subtila
-                    Text("In husa")
+                    // Earbud in case — green message, subtle bar
+                    Text("In case")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.accentGreen)
                     RoundedRectangle(cornerRadius: 3)
@@ -362,7 +362,7 @@ struct BudCard: View {
                         .foregroundColor(theme.textSecondary)
                         .kerning(1.2)
                 } else {
-                    // Casca activa — arata procentul
+                    // Active earbud — show percentage
                     Text(battery >= 0 ? "\(battery)%" : "--")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
@@ -407,14 +407,14 @@ struct CaseCard: View {
         return theme.accentGreen
     }
 
-    // Mesaj informativ husă
+    // Case status message
     var caseMessage: String {
         if charging {
-            if battery >= 100 { return "Complet încărcată" }
-            return "Se încarcă..."
+            if battery >= 100 { return "Fully charged" }
+            return "Charging..."
         }
-        // Husa nu raportează baterie = nu e în raza Bluetooth sau e descărcată complet
-        if !available { return "Husă nedetectată" }
+        // No case reading = out of Bluetooth range or fully drained
+        if !available { return "Case not detected" }
         return ""
     }
 
@@ -424,7 +424,7 @@ struct CaseCard: View {
                 AirPodsProCaseIcon(color: available ? (charging ? theme.accentGreen : theme.accentBlue) : theme.textSecondary.opacity(0.35))
                     .frame(width: 28, height: 36)
 
-                // Bolt mic pe iconita husei cand se incarca
+                // Small bolt on the case icon while charging
                 if charging {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 9, weight: .bold))
@@ -436,9 +436,9 @@ struct CaseCard: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                // Header: HUSA + procent + charging
+                // Header: CASE + percent + charging
                 HStack(spacing: 5) {
-                    Text("HUSA")
+                    Text("CASE")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                         .kerning(1.2)
@@ -448,12 +448,12 @@ struct CaseCard: View {
                         .foregroundColor(charging ? theme.accentGreen : (available ? theme.textPrimary : theme.textSecondary))
                 }
 
-                // Bara de baterie
+                // Battery bar
                 if available {
                     BatteryBar(level: battery, color: batteryColor).frame(height: 6)
                 }
 
-                // Mesaj informativ
+                // Status message
                 if !caseMessage.isEmpty {
                     HStack(spacing: 3) {
                         if charging {
@@ -502,7 +502,7 @@ struct AirPodsProCaseIcon: View {
             ctx.stroke(bodyPath, with: .color(color),
                       style: StrokeStyle(lineWidth: lw, lineJoin: .round))
 
-            // Linie separare capac/corp la 32% din înălțime
+            // Lid/body separator line at 32% of the height
             let splitY = h * 0.32
             var splitLine = Path()
             splitLine.move(to: CGPoint(x: r * 0.5, y: splitY))
@@ -510,20 +510,20 @@ struct AirPodsProCaseIcon: View {
             ctx.stroke(splitLine, with: .color(color.opacity(0.50)),
                       style: StrokeStyle(lineWidth: lw * 0.55))
 
-            // Fill capac (zona de sus)
+            // Fill the lid (top zone)
             let capPath = Path(roundedRect: CGRect(x: lw/2, y: lw/2,
                                                     width: w - lw, height: splitY),
                                cornerRadius: r * 0.85)
             ctx.fill(capPath, with: .color(color.opacity(0.07)))
 
-            // LED — punct centrat în capac
+            // LED — small dot centered on the lid
             let ledR = w * 0.065
             let ledPath = Path(ellipseIn: CGRect(
                 x: w/2 - ledR, y: splitY * 0.48 - ledR,
                 width: ledR * 2, height: ledR * 2))
             ctx.fill(ledPath, with: .color(color.opacity(0.90)))
 
-            // Slot cască — oval vertical mic, centrat în corp
+            // Earbud slot — small vertical oval centered on the body
             let slotW = w * 0.19
             let slotH = h * 0.20
             let slotX = (w - slotW) / 2
@@ -535,7 +535,7 @@ struct AirPodsProCaseIcon: View {
             ctx.stroke(slotPath, with: .color(color.opacity(0.55)),
                       style: StrokeStyle(lineWidth: lw * 0.60))
         }
-        // aspectRatio 0.78 = proportiile reale ale husei — previne orice stretch
+        // aspectRatio 0.78 = the case's real proportions — prevents stretching
         .aspectRatio(0.78, contentMode: .fit)
     }
 }
