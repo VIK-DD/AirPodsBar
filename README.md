@@ -137,9 +137,9 @@ rm -f ~/Library/LaunchAgents/com.vik.airpodsbar.plist
 
 ---
 
-## License
+<h2 align="center">License</h2>
 
-MIT — see [LICENSE](LICENSE)
+<p align="center">MIT — see <a href="LICENSE">LICENSE</a></p>
 
 ---
 
