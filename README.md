@@ -1,115 +1,78 @@
 # 🎧 AirPodsBar
 
-A lightweight native macOS menu bar app that shows your AirPods battery in real time — Pro, regular, Max, and Beats supported.
+Native macOS menu bar app that shows your AirPods battery in real time — Pro, regular, Max, and Beats all supported.
 
-![preview](Assets/preview.png)
-
-## Features
-
-- **Live battery** for the **left bud**, **right bud**, and the **charging case**
-- **In-case detection** — clearly shows which bud is docked in the case
-- **Charging indicator** — animated breathing battery bar while charging
+## What it does
+- Shows battery for the **left bud**, **right bud**, and the **case**
+- Indicates if a bud is **in the case** (in-case detection)
+- Indicates when a component is **charging** (animated breathing battery bar)
+- **Connect / Disconnect** AirPods from inside the app
+- Starts automatically at **login**
 - **Multi-device support** — auto-detects AirPods, AirPods Pro, AirPods Max, and Beats
-- **Global hotkey** — `⌥⌘A` toggles the popover from anywhere, no need to reach for the menu bar
-- **Low battery alert** — menu bar icon turns orange when a bud drops below 20%
-- **Native notifications** when battery is low or starts charging
-- **Connect / Disconnect** AirPods directly from the app (no Bluetooth menu needed)
-- **Light / Dark theme** that follows your preference
-- **Launch at login** toggle
-- Auto-refreshes every **30 seconds**
-
----
-
-## What's new in v2.0
-
-- 🌍 Full English interface (previously Romanian-only)
-- ⌥⌘A global hotkey to toggle the popover from anywhere
-- Multi-device support — AirPods 2/3, AirPods Pro, AirPods Max, Beats
-- Charging breathing animation on the battery bar
-- Orange menu bar icon when any bud drops below 20%
-- Smarter `resolveAddress()` for non-AirPods devices (Beats fix)
-- Various small bug fixes around battery edge cases (0%)
+- **Global hotkey** `⌥⌘A` — toggle the popover from anywhere
+- **Low-battery indicator** — menu bar icon turns orange when a bud drops below 20%
+- Refreshes every **30 seconds**
 
 ---
 
 ## Install
 
-### Option A — Pre-built binary (recommended)
+### Step 1 — Download the pre-built app (recommended)
+Grab the latest `.dmg` or `.zip` from the [Releases page](https://github.com/VIK-DD/AirPodsBar/releases/latest), then skip to Step 4.
 
-1. Download `AirPodsBar.app.zip` from the [Releases page](https://github.com/VIK-DD/AirPodsBar/releases/latest)
-2. Unzip and drag `AirPodsBar.app` into `/Applications`
-3. Right-click → **Open** (first time only, to bypass Gatekeeper)
-4. Approve the Bluetooth permission prompt when it appears
-
-### Option B — Build from source
-
+### Step 2 — Open the project in Xcode (build from source)
 ```bash
-git clone https://github.com/VIK-DD/AirPodsBar.git
-cd AirPodsBar
 open AirPodsBar.xcodeproj
 ```
 
-In Xcode: **Product → Run** (`⌘R`). For a Release build:
+### Step 3 — Build & Run
+1. In Xcode: **Product → Run** (⌘R)
+2. The first time, macOS will ask for Bluetooth permission — approve it
 
+### Step 4 — Move to Applications (needed for launch-at-login)
 ```bash
+# Release build
+# Product → Archive → Distribute App → Copy App
+
+# Or build directly from terminal:
 xcodebuild -project AirPodsBar.xcodeproj -scheme AirPodsBar -configuration Release build
+
+# Copy the .app into /Applications
 cp -R build/Release/AirPodsBar.app /Applications/
 ```
 
-### Option C — One-line install script
-
-```bash
-bash install.sh
-```
-
-Compiles directly with `swiftc`, installs to `/Applications`, and sets up launch-at-login.
-
----
-
-## Launch at login
-
-Use the toggle inside the app — or do it manually:
-
+### Step 5 — Enable launch-at-login
 ```bash
 cp com.vik.airpodsbar.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.vik.airpodsbar.plist
 ```
 
-To disable:
-
+To disable launch-at-login:
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.vik.airpodsbar.plist
 ```
 
 ---
 
-## Keyboard shortcut
-
-| Shortcut | Action |
-|---|---|
-| `⌥⌘A` | Toggle popover from anywhere |
-
-No Accessibility permission required — uses Carbon's `RegisterEventHotKey`.
-
----
-
 ## Troubleshooting
 
-**Batteries show as `--`**
+**Batteries show as "--"**
 - Make sure the AirPods are connected to the Mac
-- Press the Refresh button (↻) inside the popover
-- macOS only broadcasts battery data while the buds are in active use
+- Try pressing the Refresh button (↻)
+- macOS only broadcasts battery data while the buds are actively in use
 
-**Connect / Disconnect doesn't work**
+**Connect/Disconnect doesn't work**
 - The app uses `IOBluetooth` natively — no `blueutil` needed
 - Make sure the device is paired in System Settings → Bluetooth
+- Beats devices are also supported (added in v2.0)
 
-**Doesn't launch at login**
+**App doesn't launch at startup**
 - Make sure the app lives at `/Applications/AirPodsBar.app`
 - Reload the agent: `launchctl load ~/Library/LaunchAgents/com.vik.airpodsbar.plist`
 
 **Hotkey `⌥⌘A` doesn't fire**
 - Another app may have already registered this combination (rare). Quit competing apps and relaunch AirPodsBar.
+- No Accessibility permission is required — uses Carbon's `RegisterEventHotKey`
 
 ---
 
@@ -120,26 +83,14 @@ AirPodsBar/
 ├── AirPodsBar.xcodeproj/
 │   └── project.pbxproj
 ├── AirPodsBar/
-│   ├── main.swift             # Entry point
-│   ├── AppDelegate.swift      # Menu bar + popover + global hotkey
-│   ├── BatteryMonitor.swift   # system_profiler + IOBluetooth integration
-│   ├── ContentView.swift      # SwiftUI UI
-│   └── AirPodsBar.entitlements
-├── com.vik.airpodsbar.plist   # LaunchAgent for launch-at-login
-└── install.sh                 # One-line build & install script
+│   ├── main.swift                # Entry point
+│   ├── AppDelegate.swift         # Menu bar + popover + global hotkey
+│   ├── BatteryMonitor.swift      # system_profiler + IOBluetooth integration
+│   ├── ContentView.swift         # SwiftUI UI
+│   └── AirPodsBar.entitlements   # Bluetooth permissions
+└── com.vik.airpodsbar.plist      # LaunchAgent for startup
 ```
 
 ---
 
-## Requirements
-
-- macOS 12.0 (Monterey) or later
-- AirPods, AirPods Pro, AirPods Max, or Beats (any model that reports battery via `system_profiler`)
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-Built with ❤️ for macOS.
+Made with ❤️ for macOS Monterey 12.7.6 and later.
