@@ -34,11 +34,13 @@ open AirPodsBar.xcodeproj
 # Release build
 # Product → Archive → Distribute App → Copy App
 
-# Or build directly from terminal:
-xcodebuild -project AirPodsBar.xcodeproj -scheme AirPodsBar -configuration Release build
+# Or build directly from terminal (the -derivedDataPath flag puts the
+# .app in ./build/Build/Products/Release/ instead of ~/Library/Developer/Xcode):
+xcodebuild -project AirPodsBar.xcodeproj -scheme AirPodsBar \
+           -configuration Release -derivedDataPath build build
 
 # Copy the .app into /Applications
-cp -R build/Release/AirPodsBar.app /Applications/
+cp -R build/Build/Products/Release/AirPodsBar.app /Applications/
 ```
 
 ### Step 5 — Enable launch-at-login
