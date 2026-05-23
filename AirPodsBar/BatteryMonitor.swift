@@ -2,14 +2,54 @@ import Foundation
 import IOBluetooth
 import UserNotifications
 
+// MARK: - Device model
+
+enum AirPodsModel: Equatable {
+    case airPodsPro, airPodsMax, airPods, beats, unknown
+
+    var headerSymbol: String {
+        switch self {
+        case .airPodsMax: return "airpodsmax"
+        case .beats:      return "headphones"
+        default:          return "airpodspro"
+        }
+    }
+
+    var leftBudSymbol: String {
+        switch self {
+        case .airPods:              return "airpod.left"
+        case .airPodsMax, .beats:   return "headphones"
+        default:                    return "airpodpro.left"
+        }
+    }
+
+    var rightBudSymbol: String {
+        switch self {
+        case .airPods:              return "airpod.right"
+        case .airPodsMax, .beats:   return "headphones"
+        default:                    return "airpodpro.right"
+        }
+    }
+
+    static func detect(from name: String) -> AirPodsModel {
+        let n = name.lowercased()
+        if n.contains("beats")                            { return .beats }
+        if n.contains("max")                              { return .airPodsMax }
+        if n.contains("pro")                              { return .airPodsPro }
+        if n.contains("airpods") || n.contains("airpod")  { return .airPods }
+        return .unknown
+    }
+}
+
 struct AirPodsInfo {
     var name: String = "AirPods Pro"
+    var model: AirPodsModel = .airPodsPro
     var address: String = ""
     var isConnected: Bool = false
     var leftBattery: Int = -1
     var rightBattery: Int = -1
     var caseBattery: Int = -1
-    // Charging is inferred from battery delta between refreshes
+    // Charging inferred from battery delta between refreshes
     var leftCharging: Bool = false
     var rightCharging: Bool = false
     var caseCharging: Bool = false
@@ -22,15 +62,18 @@ class BatteryMonitor: ObservableObject {
     @Published var statusMessage: String = ""
     @Published var launchAtStartup: Bool = false
 
+    @Published var lastKnownName: String = UserDefaults.standard.string(forKey: "airpodsbar.lastDeviceName") ?? "AirPods Pro"
+    @Published var lastKnownModel: AirPodsModel = AirPodsModel.detect(from: UserDefaults.standard.string(forKey: "airpodsbar.lastDeviceName") ?? "AirPods Pro")
+
     private var lastConnectedState: Bool = false
     private var timer: Timer?
 
-    // Previous values used to infer charging via positive delta
+    // Previous values used for delta-based charging detection
     private var prevLeft: Int = -1
     private var prevRight: Int = -1
     private var prevCase: Int = -1
 
-    // Anti-spam: track which notifications have already been sent
+    // Anti-spam — remember which notifications were already sent
     private var notifiedLow: Set<String> = []  // "left", "right", "case"
     private var notifiedCharging: Set<String> = []
 
@@ -78,25 +121,30 @@ class BatteryMonitor: ObservableObject {
             var info = self.fetchAirPodsInfo()
 
             // Charging inference runs on the main thread (in the async block below)
-            // to avoid a race condition on prevLeft/Right/Case.
+            // to avoid race conditions with prevLeft/Right/Case
 
             DispatchQueue.main.async {
                 let wasConnected = self.lastConnectedState
 
-                // Infer charging on the main thread — read and write prev values in the same context
-                // to eliminate the race against the background read.
+                // Infer charging on the main thread — read and write prevValues in the same context.
+                // Eliminates the race against the background thread.
                 if self.prevLeft  >= 0 && info.leftBattery  > self.prevLeft  { info.leftCharging  = true }
                 if self.prevRight >= 0 && info.rightBattery > self.prevRight { info.rightCharging = true }
                 if self.prevCase  >= 0 && info.caseBattery  > self.prevCase  { info.caseCharging  = true }
 
                 // Update prev values after inference
-                if info.leftBattery  > 0 { self.prevLeft  = info.leftBattery }
-                if info.rightBattery > 0 { self.prevRight = info.rightBattery }
-                if info.caseBattery  > 0 { self.prevCase  = info.caseBattery }
+                if info.leftBattery  >= 0 { self.prevLeft  = info.leftBattery }
+                if info.rightBattery >= 0 { self.prevRight = info.rightBattery }
+                if info.caseBattery  >= 0 { self.prevCase  = info.caseBattery }
 
                 self.airpods = info
                 self.isLoading = false
                 self.lastUpdated = Date()
+                if info.isConnected {
+                    self.lastKnownName  = info.name
+                    self.lastKnownModel = info.model
+                    UserDefaults.standard.set(info.name, forKey: "airpodsbar.lastDeviceName")
+                }
 
                 // ── Connection state change ──
                 if info.isConnected != wasConnected {
@@ -105,22 +153,22 @@ class BatteryMonitor: ObservableObject {
                         name: NSNotification.Name("AirPodsConnectionChanged"), object: nil)
                     if !info.isConnected {
                         // On disconnect: reset everything BEFORE notifications
-                        // so we don't send false notifications with stale data
+                        // so we don't fire false alerts with stale data
                         self.notifiedLow.removeAll()
                         self.notifiedCharging.removeAll()
                         self.prevLeft = -1; self.prevRight = -1; self.prevCase = -1
-                        // ConnectionChanged already notifies AppDelegate — don't double-post DataRefreshed
+                        // ConnectionChanged also notifies AppDelegate — don't double-fire DataRefreshed
                         return
                     }
                 }
 
-                // ── Low-battery notifications (only when connected) ──
+                // ── Low battery notifications (only when connected) ──
                 if info.isConnected {
                     self.checkLowBatteryNotifications(info: info)
                     self.checkChargingNotifications(info: info)
                 }
 
-                // ── Refresh menu bar tooltip and label ──
+                // ── Update tooltip and menu bar label ──
                 NotificationCenter.default.post(
                     name: NSNotification.Name("AirPodsDataRefreshed"), object: nil)
             }
@@ -132,23 +180,23 @@ class BatteryMonitor: ObservableObject {
     private func checkLowBatteryNotifications(info: AirPodsInfo) {
         let threshold = 20
 
-        if info.leftBattery > 0 && info.leftBattery <= threshold && !info.leftCharging
+        if info.leftBattery >= 0 && info.leftBattery <= threshold && !info.leftCharging
             && !notifiedLow.contains("left") {
             sendNotification(
                 title: "Low battery — \(info.name)",
-                body: "Left earbud is at \(info.leftBattery)%.",
+                body: "Left earbud has only \(info.leftBattery)% battery.",
                 identifier: "low_left"
             )
             notifiedLow.insert("left")
         } else if info.leftBattery > threshold {
-            notifiedLow.remove("left")  // reset once the battery has recharged
+            notifiedLow.remove("left")  // reset once it's charged
         }
 
-        if info.rightBattery > 0 && info.rightBattery <= threshold && !info.rightCharging
+        if info.rightBattery >= 0 && info.rightBattery <= threshold && !info.rightCharging
             && !notifiedLow.contains("right") {
             sendNotification(
                 title: "Low battery — \(info.name)",
-                body: "Right earbud is at \(info.rightBattery)%.",
+                body: "Right earbud has only \(info.rightBattery)% battery.",
                 identifier: "low_right"
             )
             notifiedLow.insert("right")
@@ -156,11 +204,11 @@ class BatteryMonitor: ObservableObject {
             notifiedLow.remove("right")
         }
 
-        if info.caseBattery > 0 && info.caseBattery <= threshold && !info.caseCharging
+        if info.caseBattery >= 0 && info.caseBattery <= threshold && !info.caseCharging
             && !notifiedLow.contains("case") {
             sendNotification(
                 title: "Low battery — Case",
-                body: "Charging case is at \(info.caseBattery)%.",
+                body: "Charging case has only \(info.caseBattery)% battery.",
                 identifier: "low_case"
             )
             notifiedLow.insert("case")
@@ -251,9 +299,10 @@ class BatteryMonitor: ObservableObject {
             if !inBlock {
                 if trimmed.hasSuffix(":") {
                     let name = String(trimmed.dropLast())
-                    if name.lowercased().contains("airpods") {
+                    if name.lowercased().contains("airpods") || name.lowercased().contains("airpod") || name.lowercased().contains("beats") {
                         inBlock = true
                         result.name = name
+                        result.model = AirPodsModel.detect(from: name)
                         blockIndent = line.prefix(while: { $0 == " " }).count
                     }
                 }
@@ -352,7 +401,7 @@ class BatteryMonitor: ObservableObject {
                 self.notifiedLow.removeAll()
                 self.notifiedCharging.removeAll()
                 self.prevLeft = -1; self.prevRight = -1; self.prevCase = -1
-                // Notify AppDelegate to refresh the icon and tooltip
+                // Notify AppDelegate to update icon and tooltip
                 NotificationCenter.default.post(
                     name: NSNotification.Name("AirPodsConnectionChanged"), object: nil)
             }
@@ -363,7 +412,8 @@ class BatteryMonitor: ObservableObject {
         if !airpods.address.isEmpty { return airpods.address }
         if let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] {
             for dev in paired {
-                if let name = dev.name, name.lowercased().contains("airpods") {
+                guard let name = dev.name?.lowercased() else { continue }
+                if name.contains("airpods") || name.contains("airpod") || name.contains("beats") {
                     return dev.addressString ?? ""
                 }
             }
@@ -382,11 +432,11 @@ class BatteryMonitor: ObservableObject {
         task.arguments = ["-c", command]
         let pipe = Pipe()
         task.standardOutput = pipe
-        task.standardError = Pipe()  // separate stderr — keeps stdout clean
+        task.standardError = Pipe()  // separate stderr — keeps output clean
 
         do { try task.run() } catch { return "" }
 
-        // Watchdog — if the process hangs longer than timeout, kill it
+        // Watchdog — if the process hangs longer than the timeout, kill it forcibly
         let deadline = DispatchTime.now() + timeout
         let result = DispatchSemaphore(value: 0)
 

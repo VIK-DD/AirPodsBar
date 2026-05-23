@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -6,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var popover: NSPopover?
     var batteryMonitor: BatteryMonitor?
     var eventMonitor: EventMonitor?
+    var hotkeyManager: HotkeyManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -45,9 +47,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.closePopover()
         }
 
+        hotkeyManager = HotkeyManager()
+        hotkeyManager?.onHotKey = { [weak self] in
+            DispatchQueue.main.async { self?.togglePopover() }
+        }
+        hotkeyManager?.register()
+
         batteryMonitor?.startMonitoring()
 
-        // Refresh icon + tooltip when the connection state changes
+        // Update icon + tooltip on connection change
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("AirPodsConnectionChanged"),
             object: nil, queue: .main
@@ -55,8 +63,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateStatusFromMonitor()
         }
 
-        // Refresh icon + tooltip on every data refresh
-        // (needed for the "In case" tooltip and the menu bar percentage)
+        // Update icon + tooltip on every data refresh
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("AirPodsDataRefreshed"),
             object: nil, queue: .main
@@ -71,9 +78,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Graceful shutdown — stop timers cleanly
         batteryMonitor?.stopMonitoring()
         eventMonitor?.stop()
+        hotkeyManager?.unregister()
     }
 
     // MARK: - Update status (icon + tooltip + label)
@@ -89,68 +96,68 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func updateStatusIcon(connected: Bool, airpods: AirPodsInfo? = nil) {
         guard let button = statusItem?.button else { return }
 
-        let info = airpods ?? batteryMonitor?.airpods
-        let left  = info?.leftBattery  ?? -1
-        let right = info?.rightBattery ?? -1
-        let caseB = info?.caseBattery  ?? -1
+        let info           = airpods ?? batteryMonitor?.airpods
+        let left           = info?.leftBattery  ?? -1
+        let right          = info?.rightBattery ?? -1
+        let caseB          = info?.caseBattery  ?? -1
         let caseHasBattery = caseB >= 0
-        let leftInCase  = left  < 0 && caseHasBattery
-        let rightInCase = right < 0 && caseHasBattery
+        let leftInCase     = left  < 0 && caseHasBattery
+        let rightInCase    = right < 0 && caseHasBattery
+        let deviceName     = (info?.isConnected == true ? info?.name : nil)
+                             ?? batteryMonitor?.lastKnownName ?? "AirPods"
+        let model          = info?.model ?? batteryMonitor?.lastKnownModel ?? .airPodsPro
 
-        // ── Dynamic tooltip ──
+        // ── Full dynamic tooltip ──
         if connected || caseHasBattery {
             var parts: [String] = []
+            if connected             { parts.append("\(deviceName) — Connected") }
+            else if caseHasBattery   { parts.append("\(deviceName) — In case") }
 
-            if connected {
-                parts.append("AirPods Pro — Connected")
-            } else if caseHasBattery {
-                parts.append("AirPods Pro — In case")
-            }
+            if leftInCase            { parts.append("Left: in case") }
+            else if left >= 0        { parts.append("Left: \(left)%") }
 
-            // Earbuds — with "In case" status when applicable
-            if leftInCase {
-                parts.append("Left: in case")
-            } else if left >= 0 {
-                parts.append("Left: \(left)%")
-            }
+            if rightInCase           { parts.append("Right: in case") }
+            else if right >= 0       { parts.append("Right: \(right)%") }
 
-            if rightInCase {
-                parts.append("Right: in case")
-            } else if right >= 0 {
-                parts.append("Right: \(right)%")
-            }
-
-            if caseB >= 0 {
-                parts.append("Case: \(caseB)%")
-            }
+            if caseB >= 0            { parts.append("Case: \(caseB)%") }
 
             button.toolTip = parts.joined(separator: "\n")
         } else {
-            button.toolTip = "AirPods Pro — Disconnected"
+            button.toolTip = "\(deviceName) — Disconnected"
         }
 
-        // ── Lowest active battery shown next to the icon ──
-        // Only when earbuds are connected and active (not in case)
+        button.title = ""
+
+        // ── Low battery → orange ──
         let activeBatteries = [left, right].filter { $0 >= 0 }
-        if connected, let minBat = activeBatteries.min() {
-            button.title = " \(minBat)%"
-        } else {
-            button.title = ""
-        }
+        let isLow = connected && (activeBatteries.min().map { $0 < 20 } ?? false)
 
         // ── Icon ──
         if connected {
-            if let img = NSImage(systemSymbolName: "airpodspro",
-                                 accessibilityDescription: "AirPods connected") {
-                img.isTemplate = true
-                button.image = img
-                button.imagePosition = .imageLeft
+            let cfg = NSImage.SymbolConfiguration(pointSize: 14, weight: .light)
+            guard let base = NSImage(systemSymbolName: model.headerSymbol,
+                                     accessibilityDescription: "\(deviceName) — Connected")?
+                    .withSymbolConfiguration(cfg) else { return }
+
+            if isLow {
+                let tinted = NSImage(size: base.size, flipped: false) { _ in
+                    base.draw(in: NSRect(origin: .zero, size: base.size))
+                    NSColor.systemOrange.setFill()
+                    NSRect(origin: .zero, size: base.size).fill(using: .sourceAtop)
+                    return true
+                }
+                tinted.isTemplate = false
+                button.image = tinted
+            } else {
+                base.isTemplate = true
+                button.image = base
             }
+            button.imagePosition = .imageOnly
         } else {
             // Disconnected — red badge with X
             let symbolConfig = NSImage.SymbolConfiguration(pointSize: 13, weight: .light)
-            guard let baseImg = NSImage(systemSymbolName: "airpodspro",
-                                        accessibilityDescription: nil)?
+            guard let baseImg = NSImage(systemSymbolName: model.headerSymbol,
+                                        accessibilityDescription: "\(deviceName) — Disconnected")?
                     .withSymbolConfiguration(symbolConfig) else { return }
 
             let baseSize = baseImg.size
@@ -168,15 +175,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let bx = totalW - badgeSize
                 let by = totalH - badgeSize - 0.5
 
-                // Contrast ring
                 NSColor.windowBackgroundColor.withAlphaComponent(0.85).setFill()
                 NSBezierPath(ovalIn: NSRect(x: bx-1.2, y: by-1.2,
                                              width: badgeSize+2.4, height: badgeSize+2.4)).fill()
-                // Red circle
                 NSColor.systemRed.setFill()
                 NSBezierPath(ovalIn: NSRect(x: bx, y: by,
                                              width: badgeSize, height: badgeSize)).fill()
-                // White X
                 NSColor.white.setStroke()
                 let p: CGFloat = 1.7
                 let x = NSBezierPath()
@@ -191,7 +195,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             canvas.isTemplate = false
             button.image = canvas
-            button.title = ""
             button.imagePosition = .imageOnly
         }
     }
@@ -241,4 +244,38 @@ class EventMonitor {
     func stop() {
         if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
     }
+}
+
+// MARK: - Hotkey Manager (⌥⌘A — toggle popover, no Accessibility permission needed)
+
+class HotkeyManager {
+    private var hotKeyRef: EventHotKeyRef?
+    private var eventHandlerRef: EventHandlerRef?
+    var onHotKey: (() -> Void)?
+
+    func register() {
+        var spec = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let ctx = Unmanaged.passUnretained(self).toOpaque()
+        InstallEventHandler(GetApplicationEventTarget(), { _, _, ptr -> OSStatus in
+            guard let ptr = ptr else { return OSStatus(eventNotHandledErr) }
+            Unmanaged<HotkeyManager>.fromOpaque(ptr).takeUnretainedValue().onHotKey?()
+            return noErr
+        }, 1, &spec, ctx, &eventHandlerRef)
+
+        var hkID = EventHotKeyID()
+        hkID.signature = 0x41504252  // 'APBR'
+        hkID.id = 1
+        RegisterEventHotKey(UInt32(kVK_ANSI_A), UInt32(optionKey | cmdKey),
+                            hkID, GetApplicationEventTarget(), 0, &hotKeyRef)
+    }
+
+    func unregister() {
+        if let ref = hotKeyRef       { UnregisterEventHotKey(ref); hotKeyRef = nil }
+        if let ref = eventHandlerRef { RemoveEventHandler(ref); eventHandlerRef = nil }
+    }
+
+    deinit { unregister() }
 }

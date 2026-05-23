@@ -19,7 +19,7 @@ NC='\033[0m'
 
 # -------- config --------
 APP_NAME="AirPodsBar"
-VERSION="1.0"
+VERSION="2.0"
 DMG_NAME="${APP_NAME}-${VERSION}"
 VOLUME_NAME="${APP_NAME} ${VERSION}"
 
@@ -49,13 +49,6 @@ if [ "$1" != "--no-build" ]; then
     # Run install.sh up to the bundle creation, but don't install to /Applications.
     # We re-implement a minimal build here to keep this script standalone-friendly.
 
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "arm64" ]; then
-        TARGET="arm64-apple-macos12.0"
-    else
-        TARGET="x86_64-apple-macos12.0"
-    fi
-
     CONTENTS="$APP_BUNDLE/Contents"
     MACOS_DIR="$CONTENTS/MacOS"
     RESOURCES_DIR="$CONTENTS/Resources"
@@ -63,20 +56,36 @@ if [ "$1" != "--no-build" ]; then
     rm -rf "$BUILD_DIR"
     mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
-    swiftc \
-        "AirPodsBar/main.swift" \
-        "AirPodsBar/AppDelegate.swift" \
-        "AirPodsBar/BatteryMonitor.swift" \
-        "AirPodsBar/ContentView.swift" \
-        -o "$MACOS_DIR/${APP_NAME}" \
-        -sdk "$(xcrun --show-sdk-path)" \
-        -target "$TARGET" \
-        -framework SwiftUI \
-        -framework AppKit \
-        -framework IOBluetooth \
-        -framework Combine \
-        -framework UserNotifications \
-        -O
+    SWIFT_SRCS=(
+        "AirPodsBar/main.swift"
+        "AirPodsBar/AppDelegate.swift"
+        "AirPodsBar/BatteryMonitor.swift"
+        "AirPodsBar/ContentView.swift"
+    )
+    SWIFTC_FRAMEWORKS=(
+        -framework SwiftUI -framework AppKit -framework IOBluetooth
+        -framework Carbon -framework Combine -framework UserNotifications
+    )
+    SDK_PATH="$(xcrun --show-sdk-path)"
+
+    # Build universal binary — both arm64 (Apple Silicon) and x86_64 (Intel)
+    echo "  Building arm64 slice..."
+    swiftc "${SWIFT_SRCS[@]}" \
+        -o "$BUILD_DIR/${APP_NAME}-arm64" \
+        -sdk "$SDK_PATH" -target arm64-apple-macos12.0 \
+        "${SWIFTC_FRAMEWORKS[@]}" -O
+
+    echo "  Building x86_64 slice..."
+    swiftc "${SWIFT_SRCS[@]}" \
+        -o "$BUILD_DIR/${APP_NAME}-x86_64" \
+        -sdk "$SDK_PATH" -target x86_64-apple-macos12.0 \
+        "${SWIFTC_FRAMEWORKS[@]}" -O
+
+    echo "  Merging slices with lipo..."
+    lipo -create -output "$MACOS_DIR/${APP_NAME}" \
+        "$BUILD_DIR/${APP_NAME}-arm64" \
+        "$BUILD_DIR/${APP_NAME}-x86_64"
+    rm "$BUILD_DIR/${APP_NAME}-arm64" "$BUILD_DIR/${APP_NAME}-x86_64"
 
     # Info.plist
     cat > "$CONTENTS/Info.plist" << PLIST_EOF
@@ -88,7 +97,7 @@ if [ "$1" != "--no-build" ]; then
     <key>CFBundleIdentifier</key><string>com.vik.airpodsbar</string>
     <key>CFBundleName</key><string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key><string>${APP_NAME}</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleVersion</key><string>2</string>
     <key>CFBundleShortVersionString</key><string>${VERSION}</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>LSMinimumSystemVersion</key><string>12.0</string>

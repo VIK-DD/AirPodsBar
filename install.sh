@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 #  AirPodsBar — Install Script
-#  Run from the AirPodsBar/ project root:  bash install.sh
+#  Run from the project root:  bash install.sh
 # ============================================================
 
 set -e
@@ -18,7 +18,7 @@ echo "================================"
 
 # --- 0. Verify we're in the right folder ---
 if [ ! -f "AirPodsBar/main.swift" ]; then
-    echo -e "${RED}✗ Error: run this script FROM the project root (the folder that contains AirPodsBar/).${NC}"
+    echo -e "${RED}✗ Error: run this script FROM the AirPodsBar/ project root${NC}"
     echo "  cd ~/Downloads/AirPodsBar && bash install.sh"
     exit 1
 fi
@@ -31,7 +31,7 @@ if ! xcode-select -p &>/dev/null; then
     echo "  Install them with:"
     echo "  xcode-select --install"
     echo ""
-    echo "  Then re-run: bash install.sh"
+    echo "  Then run again: bash install.sh"
     exit 1
 fi
 echo -e "${GREEN}✓ Xcode CLT: $(xcode-select -p)${NC}"
@@ -42,9 +42,9 @@ if ! command -v swiftc &>/dev/null; then
 fi
 echo -e "${GREEN}✓ swiftc: $(swiftc --version | head -1)${NC}"
 
-# --- 2. Dependencies ---
+# --- 2. Dependencies (none required since v1.0) ---
 echo -e "\n${YELLOW}[2/6]${NC} Checking dependencies..."
-echo -e "${GREEN}✓ Connect/Disconnect uses native IOBluetooth — blueutil is not required.${NC}"
+echo -e "${GREEN}✓ Connect/Disconnect uses native IOBluetooth — no external deps needed.${NC}"
 
 # --- 3. Detect architecture and compile ---
 echo -e "\n${YELLOW}[3/6]${NC} Compiling for your architecture..."
@@ -81,7 +81,7 @@ for f in "${SWIFT_FILES[@]}"; do
     fi
 done
 
-echo "  Compiling... (this can take 30-60 seconds)"
+echo "  Compiling... (may take 30-60 seconds)"
 
 swiftc "${SWIFT_FILES[@]}" \
     -o "$MACOS_DIR/AirPodsBar" \
@@ -90,14 +90,15 @@ swiftc "${SWIFT_FILES[@]}" \
     -framework SwiftUI \
     -framework AppKit \
     -framework IOBluetooth \
+    -framework Carbon \
     -framework Combine \
     -framework UserNotifications \
     -O
 
-echo -e "${GREEN}✓ Compiled successfully for $TARGET${NC}"
+echo -e "${GREEN}✓ Built successfully for $TARGET${NC}"
 
 # --- 4. Create Info.plist ---
-echo -e "\n${YELLOW}[4/6]${NC} Creating the app bundle..."
+echo -e "\n${YELLOW}[4/6]${NC} Creating app bundle..."
 
 cat > "$CONTENTS/Info.plist" << 'PLIST_EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -113,9 +114,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST_EOF'
     <key>CFBundleDisplayName</key>
     <string>AirPodsBar</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>2.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -123,9 +124,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST_EOF'
     <key>LSUIElement</key>
     <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>AirPodsBar reads your AirPods battery levels.</string>
+    <string>AirPodsBar reads the battery level of your AirPods.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
-    <string>AirPodsBar reads your AirPods battery levels.</string>
+    <string>AirPodsBar reads the battery level of your AirPods.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>CFBundleIconFile</key>
@@ -142,19 +143,19 @@ PLIST_EOF
 if [ -f "AirPodsBar/AppIcon.png" ]; then
     cp "AirPodsBar/AppIcon.png" "$RESOURCES_DIR/AppIcon.png"
     cp "AirPodsBar/AppIcon@2x.png" "$RESOURCES_DIR/AppIcon@2x.png" 2>/dev/null || true
-    echo "  Icon copied into the bundle."
+    echo "  Icon copied into bundle."
 fi
 
-# Build .icns from PNGs so Finder shows the right app icon
+# Build .icns from PNGs for Finder (app icon)
 if command -v iconutil &>/dev/null; then
     ICONSET_DIR="$BUILD_DIR/AppIcon.iconset"
     mkdir -p "$ICONSET_DIR"
+    # Copy every available size
     for f in AirPodsBar/Assets.xcassets/AppIcon.appiconset/*.png; do
         cp "$f" "$ICONSET_DIR/" 2>/dev/null || true
     done
     iconutil -c icns "$ICONSET_DIR" -o "$RESOURCES_DIR/AppIcon.icns" 2>/dev/null && \
-        echo "  AppIcon.icns created." || \
-        echo "  iconutil could not create .icns (ok, PNG fallback in place)."
+        echo "  AppIcon.icns generated." || echo "  iconutil could not generate .icns (ok, PNG fallback used)."
 fi
 
 echo -e "${GREEN}✓ Info.plist created.${NC}"
@@ -164,7 +165,7 @@ echo -e "\n${YELLOW}[5/6]${NC} Installing into /Applications..."
 
 DEST="/Applications/AirPodsBar.app"
 if [ -d "$DEST" ]; then
-    echo "  Existing version detected — removing it..."
+    echo "  Old version detected — removing it..."
     pkill -x AirPodsBar 2>/dev/null || true
     sleep 1
     rm -rf "$DEST"
@@ -173,36 +174,36 @@ fi
 cp -R "$APP_BUNDLE" "$DEST"
 echo -e "${GREEN}✓ /Applications/AirPodsBar.app${NC}"
 
-# --- 6. Configure launch at login ---
-echo -e "\n${YELLOW}[6/6]${NC} Configuring launch at login..."
+# --- 6. Configure launch-at-login ---
+echo -e "\n${YELLOW}[6/6]${NC} Setting up launch at login..."
 
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 mkdir -p "$LAUNCH_AGENTS"
 
 PLIST_DEST="$LAUNCH_AGENTS/com.vik.airpodsbar.plist"
 
-# We just write the plist — launchd will pick it up at next login.
-# We do NOT call `launchctl load` here to avoid starting a second
-# instance on top of the one we're about to open below.
+# Just write the plist file — launchd picks it up at login.
+# We do NOT call `launchctl load` here — it would start a second instance
+# on top of the one we open below.
 cp "$(pwd)/com.vik.airpodsbar.plist" "$PLIST_DEST"
 
-echo -e "${GREEN}✓ Startup configured (active from next login).${NC}"
+echo -e "${GREEN}✓ Launch-at-login configured (active from next login).${NC}"
 
 # --- Done ---
 echo ""
 echo -e "${GREEN}================================${NC}"
-echo -e "${GREEN}🎉 Installation complete!${NC}"
+echo -e "${GREEN}🎉 Install complete!${NC}"
 echo -e "${GREEN}================================${NC}"
 echo ""
-echo "  Launching AirPodsBar now..."
+echo "  Starting AirPodsBar now..."
 open "$DEST"
 sleep 1
 echo ""
-echo -e "  🎧 An icon appeared in your menu bar (top right)."
-echo -e "  Click it to view your AirPods battery."
+echo -e "  🎧 Icon should appear in the menu bar (top-right)."
+echo -e "  Click it to see your AirPods battery — or press ⌥⌘A from anywhere."
 echo ""
 echo -e "${BLUE}Useful commands:${NC}"
-echo "  Quit app:             pkill -x AirPodsBar"
-echo "  Disable startup:      launchctl unload ~/Library/LaunchAgents/com.vik.airpodsbar.plist"
-echo "  Uninstall:            rm -rf /Applications/AirPodsBar.app"
-echo "  Reinstall:            bash install.sh"
+echo "  Stop app:               pkill -x AirPodsBar"
+echo "  Disable launch-at-login: launchctl unload ~/Library/LaunchAgents/com.vik.airpodsbar.plist"
+echo "  Uninstall:              rm -rf /Applications/AirPodsBar.app"
+echo "  Reinstall:              bash install.sh"

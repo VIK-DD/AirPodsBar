@@ -31,6 +31,10 @@ struct ContentView: View {
 
     var theme: AppTheme { AppTheme(isDark: isDark) }
 
+    var currentModel: AirPodsModel {
+        monitor.airpods.isConnected ? monitor.airpods.model : monitor.lastKnownModel
+    }
+
     var body: some View {
         ZStack {
             theme.bg.ignoresSafeArea()
@@ -48,7 +52,7 @@ struct ContentView: View {
                         // Fully disconnected — case isn't reporting either
                         disconnectedView
                     } else {
-                        // Connected OR earbuds are in the case (case reports battery)
+                        // Connected OR buds in case (case is reporting battery)
                         batteryCards
                     }
                 }
@@ -75,17 +79,17 @@ struct ContentView: View {
         .frame(width: 320, height: 460)
         .animation(.easeInOut(duration: 0.25), value: isDark)
         .onAppear { pulseAnimation = true }
-        // Local 5s timer — refreshes ONLY the "Xs ago" text
-        // Avoids re-rendering the whole ContentView (unlike @Published)
+        // Local 5s timer — updates ONLY the "Xs ago" text
+        // Doesn't re-render the whole ContentView (unlike @Published)
         .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
-            // Tick only while the view is active (popover open)
-            tick = (tick + 1) % 720  // reset every hour so it doesn't grow unbounded
+            // Only ticks while the view is active (popover open)
+            tick = (tick + 1) % 720  // reset at 1h to avoid unbounded growth
         }
     }
 
     // MARK: - Header
-    // Layout: [icon + title + status] ---- [timestamp | theme button]
-    // The theme button sits in line with the "Updated Xs ago" text
+    // Layout: [icon + title + status] ---- [time | theme button]
+    // Theme button aligns with the "Updated Xs ago" text on the same line
 
     var headerView: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -95,14 +99,14 @@ struct ContentView: View {
                 Circle()
                     .fill(theme.accentBlue.opacity(0.15))
                     .frame(width: 42, height: 42)
-                Image(systemName: "airpodspro")
+                Image(systemName: currentModel.headerSymbol)
                     .font(.system(size: 20, weight: .light))
                     .foregroundColor(theme.accentBlue)
             }
 
             // Middle: name + connection status
             VStack(alignment: .leading, spacing: 3) {
-                Text(monitor.airpods.isConnected ? monitor.airpods.name : "AirPods Pro")
+                Text(monitor.airpods.isConnected ? monitor.airpods.name : monitor.lastKnownName)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
@@ -137,7 +141,7 @@ struct ContentView: View {
 
             Spacer()
 
-            // Right: last-updated timestamp + theme button, neatly aligned
+            // Right: last updated + theme button on the same line, cleanly aligned
             HStack(spacing: 6) {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("Updated")
@@ -148,7 +152,7 @@ struct ContentView: View {
                         .foregroundColor(theme.textSecondary)
                 }
 
-                // Theme button — bigger (28x28) for easier tapping
+                // Theme button — larger (28x28) for an easier tap target
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.25)) { isDark.toggle() }
                 }) {
@@ -168,20 +172,21 @@ struct ContentView: View {
     // MARK: - Battery Cards
 
     var batteryCards: some View {
-        // inCase logic: earbud reports no battery (-1) BUT case does
-        // That definitively means it's tucked into the case
+        // inCase logic: bud doesn't report battery (-1) BUT case has battery
+        // Means the bud is definitely in the case
         let caseHasBattery = monitor.airpods.caseBattery >= 0
         let leftInCase  = monitor.airpods.leftBattery  < 0 && caseHasBattery
         let rightInCase = monitor.airpods.rightBattery < 0 && caseHasBattery
 
+        let model = currentModel
         return VStack(spacing: 12) {
             HStack(spacing: 12) {
-                BudCard(label: "LEFT", icon: "airpodpro.left",
+                BudCard(label: "LEFT", icon: model.leftBudSymbol,
                         battery: monitor.airpods.leftBattery,
                         charging: monitor.airpods.leftCharging,
                         inCase: leftInCase,
                         theme: theme)
-                BudCard(label: "RIGHT", icon: "airpodpro.right",
+                BudCard(label: "RIGHT", icon: model.rightBudSymbol,
                         battery: monitor.airpods.rightBattery,
                         charging: monitor.airpods.rightCharging,
                         inCase: rightInCase,
@@ -200,7 +205,7 @@ struct ContentView: View {
             ProgressView()
                 .progressViewStyle(CircularProgressViewStyle(tint: theme.accentBlue))
                 .scaleEffect(1.2)
-            Text("Looking for AirPods...")
+            Text("Searching for AirPods...")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(theme.textSecondary)
         }
@@ -209,14 +214,14 @@ struct ContentView: View {
 
     var disconnectedView: some View {
         VStack(spacing: 20) {
-            Image(systemName: "airpodspro")
+            Image(systemName: currentModel.headerSymbol)
                 .font(.system(size: 52, weight: .ultraLight))
                 .foregroundColor(theme.textSecondary.opacity(0.4))
             VStack(spacing: 6) {
                 Text("AirPods disconnected")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Text("Press Connect to reconnect them")
+                Text("Press Connect to pair them")
                     .font(.system(size: 11))
                     .foregroundColor(theme.textSecondary)
             }
@@ -255,6 +260,7 @@ struct ContentView: View {
                     .background(RoundedRectangle(cornerRadius: 10).fill(theme.buttonBg))
             }
             .buttonStyle(.plain)
+            .help("Refresh now")
 
             Button(action: { NSApp.terminate(nil) }) {
                 Image(systemName: "power")
@@ -264,6 +270,7 @@ struct ContentView: View {
                     .background(RoundedRectangle(cornerRadius: 10).fill(theme.buttonBg))
             }
             .buttonStyle(.plain)
+            .help("Quit AirPodsBar")
         }
     }
 
@@ -289,6 +296,7 @@ struct ContentView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 10).fill(theme.rowBg))
+        .help("Global shortcut: ⌥⌘A toggles this window")
     }
 
     // MARK: - Helpers
@@ -310,7 +318,7 @@ struct BudCard: View {
     let icon: String
     let battery: Int
     let charging: Bool
-    let inCase: Bool   // earbud reports no battery but case does → it's in the case
+    let inCase: Bool   // bud doesn't report battery but case does → it's in the case
     let theme: AppTheme
 
     var batteryColor: Color {
@@ -322,7 +330,7 @@ struct BudCard: View {
     var body: some View {
         VStack(spacing: 12) {
 
-            // ── Iconita + indicator stare ──
+            // ── Icon + status indicator ──
             ZStack(alignment: .topTrailing) {
                 Image(systemName: icon)
                     .font(.system(size: 32, weight: .ultraLight))
@@ -332,7 +340,7 @@ struct BudCard: View {
                     )
                     .frame(height: 44)
 
-                // Cerc verde "in husa" — indicator clar, vizibil
+                // Green "in case" badge — clear visible indicator
                 if inCase {
                     ZStack {
                         Circle()
@@ -349,7 +357,7 @@ struct BudCard: View {
             // ── Card content ──
             VStack(spacing: 5) {
                 if inCase {
-                    // Earbud in case — green message, subtle bar
+                    // Bud in case — green message, subtle bar
                     Text("In case")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.accentGreen)
@@ -362,11 +370,11 @@ struct BudCard: View {
                         .foregroundColor(theme.textSecondary)
                         .kerning(1.2)
                 } else {
-                    // Active earbud — show percentage
+                    // Active bud — shows percentage
                     Text(battery >= 0 ? "\(battery)%" : "--")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
-                    BatteryBar(level: battery, color: batteryColor)
+                    BatteryBar(level: battery, color: batteryColor, charging: charging)
                         .frame(height: 5)
                         .frame(maxWidth: .infinity)
                     Text(label)
@@ -407,13 +415,13 @@ struct CaseCard: View {
         return theme.accentGreen
     }
 
-    // Case status message
+    // Case info message
     var caseMessage: String {
         if charging {
             if battery >= 100 { return "Fully charged" }
             return "Charging..."
         }
-        // No case reading = out of Bluetooth range or fully drained
+        // Case not reporting battery = out of Bluetooth range or fully drained
         if !available { return "Case not detected" }
         return ""
     }
@@ -424,7 +432,7 @@ struct CaseCard: View {
                 AirPodsProCaseIcon(color: available ? (charging ? theme.accentGreen : theme.accentBlue) : theme.textSecondary.opacity(0.35))
                     .frame(width: 28, height: 36)
 
-                // Small bolt on the case icon while charging
+                // Small bolt on case icon while charging
                 if charging {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 9, weight: .bold))
@@ -450,10 +458,10 @@ struct CaseCard: View {
 
                 // Battery bar
                 if available {
-                    BatteryBar(level: battery, color: batteryColor).frame(height: 6)
+                    BatteryBar(level: battery, color: batteryColor, charging: charging).frame(height: 6)
                 }
 
-                // Status message
+                // Info message
                 if !caseMessage.isEmpty {
                     HStack(spacing: 3) {
                         if charging {
@@ -483,7 +491,7 @@ struct CaseCard: View {
 }
 
 // MARK: - AirPods Pro Case Icon
-// Proportii naturale 0.78:1 (W:H) — exact ca husa fizica AirPods Pro 2
+// Natural 0.78:1 (W:H) proportions — matches the physical AirPods Pro 2 case
 
 struct AirPodsProCaseIcon: View {
     let color: Color
@@ -494,7 +502,7 @@ struct AirPodsProCaseIcon: View {
             let h = size.height
             let lw: CGFloat = max(1.2, w * 0.055)
 
-            // Corp principal — un singur dreptunghi rotunjit
+            // Main body — single rounded rectangle
             let r: CGFloat = w * 0.24
             let bodyPath = Path(roundedRect: CGRect(x: 0, y: 0, width: w, height: h),
                                 cornerRadius: r)
@@ -502,7 +510,7 @@ struct AirPodsProCaseIcon: View {
             ctx.stroke(bodyPath, with: .color(color),
                       style: StrokeStyle(lineWidth: lw, lineJoin: .round))
 
-            // Lid/body separator line at 32% of the height
+            // Cap/body separator line at 32% of height
             let splitY = h * 0.32
             var splitLine = Path()
             splitLine.move(to: CGPoint(x: r * 0.5, y: splitY))
@@ -510,20 +518,20 @@ struct AirPodsProCaseIcon: View {
             ctx.stroke(splitLine, with: .color(color.opacity(0.50)),
                       style: StrokeStyle(lineWidth: lw * 0.55))
 
-            // Fill the lid (top zone)
+            // Cap fill (top area)
             let capPath = Path(roundedRect: CGRect(x: lw/2, y: lw/2,
                                                     width: w - lw, height: splitY),
                                cornerRadius: r * 0.85)
             ctx.fill(capPath, with: .color(color.opacity(0.07)))
 
-            // LED — small dot centered on the lid
+            // LED — centered dot on the cap
             let ledR = w * 0.065
             let ledPath = Path(ellipseIn: CGRect(
                 x: w/2 - ledR, y: splitY * 0.48 - ledR,
                 width: ledR * 2, height: ledR * 2))
             ctx.fill(ledPath, with: .color(color.opacity(0.90)))
 
-            // Earbud slot — small vertical oval centered on the body
+            // Bud slot — small vertical oval, centered in body
             let slotW = w * 0.19
             let slotH = h * 0.20
             let slotX = (w - slotW) / 2
@@ -535,7 +543,7 @@ struct AirPodsProCaseIcon: View {
             ctx.stroke(slotPath, with: .color(color.opacity(0.55)),
                       style: StrokeStyle(lineWidth: lw * 0.60))
         }
-        // aspectRatio 0.78 = the case's real proportions — prevents stretching
+        // aspectRatio 0.78 = real case proportions — prevents stretching
         .aspectRatio(0.78, contentMode: .fit)
     }
 }
@@ -545,6 +553,8 @@ struct AirPodsProCaseIcon: View {
 struct BatteryBar: View {
     let level: Int
     let color: Color
+    var charging: Bool = false
+    @State private var breathe = false
 
     var body: some View {
         GeometryReader { geo in
@@ -559,7 +569,16 @@ struct BatteryBar: View {
                            ? geo.size.width * CGFloat(min(level, 100)) / 100.0
                            : 0)
                     .animation(.spring(response: 0.5, dampingFraction: 0.7), value: level)
+                    .opacity(breathe ? 0.45 : 1.0)
+                    .animation(
+                        breathe
+                            ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                            : .easeInOut(duration: 0.25),
+                        value: breathe
+                    )
             }
         }
+        .onAppear { breathe = charging }
+        .onChange(of: charging) { breathe = $0 }
     }
 }
