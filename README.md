@@ -143,4 +143,4 @@ rm -f ~/Library/LaunchAgents/com.vik.airpodsbar.plist
 
 ---
 
-<p align="center">Built with Swift · Made in Moldova 🇲🇩</p>
+<p align="center">Made to be calm, fast, and yours · Made in Moldova 🇲🇩</p>
