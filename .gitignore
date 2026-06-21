@@ -36,3 +36,12 @@ Package.resolved
 
 # ── Logs ────────────────────────────────────────────────
 *.log
+
+# ── Secrets / env ───────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
